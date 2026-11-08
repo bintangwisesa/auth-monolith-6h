@@ -2,50 +2,38 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\Hash;
-use Modules\Auth\Models\Role;
-use Modules\Products\Models\Category;
-use Modules\Products\Models\Product;
+use Modules\Catalog\Models\{Author, Book, Category, Publisher};
+use Modules\Membership\Models\{Member, Role};
 
 class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        // 1. Seed roles
-        $adminRole = Role::create(['name' => 'Administrator', 'slug' => 'admin']);
-        $userRole = Role::create(['name' => 'User', 'slug' => 'user']);
+        $admin  = Role::create(['name' => 'Administrator', 'slug' => 'admin']);
+        $member = Role::create(['name' => 'Member', 'slug' => 'member']);
 
-        // 2. Seed admin user (Cukup satu kali pembuatan user)
-        $admin = User::create([
-            'name' => 'Administrator',
-            'email' => 'admin@example.com',
-            'password' => Hash::make('password123'),
-        ]);
+        Member::factory()->count(5)->create()
+            ->each(fn ($m) => $m->roles()->attach($member));
+        Member::factory()->create(['name' => 'Admin Perpus', 'email' => 'admin@perpus.test'])
+            ->roles()->attach($admin);
 
-        // 3. Hubungkan Admin dengan Role menggunakan Eloquent attach()
-        $admin->roles()->attach($adminRole);
+        Publisher::factory()->count(5)->create();
+        $authors    = Author::factory()->count(10)->create();
+        $categories = Category::factory()->count(6)->create();
 
-        // Buat pengguna sampel dan hubungkan dengan role User.
-        User::factory(5)->create()->each(function (User $user) use ($userRole): void {
-            $user->roles()->attach($userRole);
-        });
+        // Sub-kategori (self-referencing)
+        $categories->take(3)->each(fn ($parent) =>
+            Category::factory()->create(['parent_id' => $parent->id])
+        );
 
-        // 4. Seed categories
-        $categories = Category::factory()->count(10)->create();
-
-        // 5. Seed products
-        $products = Product::factory()->count(50)->create();
-
-        // 6. Attach categories to products
-        $products->each(function ($product) use ($categories) {
-            $product->categories()->attach(
-                $categories->random(rand(1, 3))->pluck('id')->toArray(),
-                ['added_at' => now()]
+        Book::factory()->count(30)->create()->each(function ($book) use ($authors, $categories) {
+            $book->authors()->attach($authors->random(rand(1, 2))->pluck('id'));
+            $book->categories()->attach(
+                $categories->random(rand(1, 3))->pluck('id')->mapWithKeys(
+                    fn ($id) => [$id => ['added_at' => now()]]
+                )
             );
         });
-
-        $this->call(OrderSeeder::class);
     }
 }
